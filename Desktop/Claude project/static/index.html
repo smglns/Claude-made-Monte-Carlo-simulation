@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monte Carlo Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 380px;
+      min-width: 320px;
+      background: #fff;
+      border-right: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    #sidebar-header h1 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    #sidebar-header p {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 3px;
+    }
+
+    #sidebar-form {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+
+    /* ── Fieldsets ── */
+    fieldset {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    legend {
+      font-weight: 600;
+      font-size: 12px;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 8px 12px;
+      background: #f8fafc;
+      width: 100%;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    legend::after { content: "▾"; font-size: 11px; }
+    fieldset.collapsed legend::after { content: "▸"; }
+    .fieldset-body { padding: 10px 12px; }
+    fieldset.collapsed .fieldset-body { display: none; }
+
+    /* ── Form rows ── */
+    .form-row { margin-bottom: 8px; }
+    .form-row label {
+      display: block;
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 3px;
+    }
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      color: #1a1a2e;
+      transition: border-color 0.15s;
+    }
+    .form-row input:focus,
+    .form-row select:focus,
+    .form-row textarea:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .form-row textarea { resize: vertical; min-height: 50px; }
+
+    .form-row-inline { display: flex; gap: 8px; }
+    .form-row-inline .form-row { flex: 1; }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #334155;
+    }
+    .checkbox-row input[type=checkbox] { width: 15px; height: 15px; }
+
+    /* ── Shock events ── */
+    #shock-events-list { margin-bottom: 6px; }
+    .shock-row {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 6px;
+    }
+    .shock-row-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .shock-row-fields { display: flex; gap: 6px; }
+    .shock-row-fields .form-row { flex: 1; margin-bottom: 0; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-danger { background: #fee2e2; color: #ef4444; font-size: 11px; padding: 3px 7px; }
+    .btn-add { background: #ede9fe; color: #6366f1; font-size: 12px; }
+
+    #action-bar {
+      padding: 12px 16px;
+      border-top: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    #run-btn { width: 100%; margin-bottom: 8px; padding: 10px; font-size: 14px; }
+    #secondary-actions { display: flex; gap: 8px; }
+    #secondary-actions .btn { flex: 1; }
+
+    /* ── Main panel ── */
+    #main-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #status-bar {
+      padding: 10px 20px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 13px;
+      color: #64748b;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    #status-bar.error { color: #ef4444; background: #fff5f5; }
+    #status-bar.success { color: #10b981; }
+
+    #results-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* ── KPI row ── */
+    #kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .kpi-card .kpi-label {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .kpi-card .kpi-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    .kpi-card .kpi-value.good { color: #10b981; }
+    .kpi-card .kpi-value.warn { color: #f59e0b; }
+    .kpi-card .kpi-value.bad  { color: #ef4444; }
+
+    /* ── Charts ── */
+    #charts-row {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .chart-card h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+    .chart-wrap { position: relative; height: 240px; }
+
+    /* ── Percentile table ── */
+    #stats-table-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    #stats-table-card h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 10px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 6px 10px;
+      color: #94a3b8;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── Results actions ── */
+    #results-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Placeholder ── */
+    #placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #94a3b8;
+      text-align: center;
+      gap: 12px;
+    }
+    #placeholder svg { opacity: 0.3; }
+    #placeholder p { font-size: 15px; }
+    #placeholder small { font-size: 12px; }
+
+    .hidden { display: none !important; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #cbd5e1;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     SIDEBAR
+════════════════════════════════════════════════════════════ -->
+<aside id="sidebar">
+  <div id="sidebar-header">
+    <h1>Monte Carlo Simulator</h1>
+    <p>Investment &amp; retirement planning</p>
+  </div>
+
+  <form id="sidebar-form" onsubmit="return false;">
+
+    <!-- Scenario meta -->
+    <fieldset>
+      <legend onclick="toggleFieldset(this.parentElement)">Scenario</legend>
+      <div class="fieldset-body">
+        <div class="form-row">
+          <label for="f-name">Name</label>
+          <input id="f-name" type="text" value="My Retirement Plan" />
+        </div>
+        <div class="form-row">
+          <label for="f-desc">Description</label>
+          <textarea id="f-desc">Base case retirement scenario</textarea>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Timeline -->
+    <fieldset>
+      <legend onclick="toggleFieldset(this.parentElement)">Timeline</legend>
+      <div class="fieldset-body">
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="f-start">Start date</label>
+            <input id="f-start" type="date" value="2025-01-01" />
+          </div>
+          <div class="form-row">
+            <label for="f-end">End date</label>
+            <input id="f-end" type="date" value="2065-01-01" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="f-step">Time step (years)</label>
+          <input id="f-step" type="number" value="1" min="0.25" max="5" step="0.25" />
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Money -->
+    <fieldset>
+      <legend onclick="toggleFieldset(this.parentElement)">Money &amp; Resources</legend>
+      <div class="fieldset-body">
+        <div class="form-row">
+          <label for="f-portfolio">Initial portfolio value ($)</label>
+          <input id="f-portfolio" type="number" value="500000" min="1" step="1000" />
+        </div>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="f-contrib">Annual contribution ($)</label>
+            <input id="f-contrib" type="number" value="20000" min="0" step="1000" />
+          </div>
+          <div class="form-row">
+            <label for="f-withdraw">Annual withdrawal ($)</label>
+            <input id="f-withdraw" type="number" value="0" min="0" step="1000" />
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Risk -->
+    <fieldset>
+      <legend onclick="toggleFieldset(this.parentElement)">Risk &amp; Volatility</legend>
+      <div class="fieldset-body">
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="f-return">Expected return (%/yr)</label>
+            <input id="f-return" type="number" value="7" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="f-vol">Volatility (%/yr)</label>
+            <input id="f-vol" type="number" value="15" min="0.1" step="0.5" />
+          </div>
+        </div>
+
+        <div style="margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;color:#64748b;font-weight:600;">Shock Events</span>
+            <button type="button" class="btn btn-add" onclick="addShockEventRow()">+ Add</button>
+          </div>
+          <div id="shock-events-list"></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Success criteria -->
+    <fieldset>
+      <legend onclick="toggleFieldset(this.parentElement)">Success Criteria</legend>
+      <div class="fieldset-body">
+        <div class="checkbox-row">
+          <input id="f-never-below" type="checkbox" checked />
+          <label for="f-never-below">Portfolio must never go below floor</label>
+        </div>
+        <div class="form-row">
+          <label for="f-floor">Wealth floor ($)</label>
+          <input id="f-floor" type="number" value="0" min="0" step="1000" />
+        </div>
+        <div class="form-row">
+          <label for="f-target">Target portfolio value at end ($, 0 = any positive)</label>
+          <input id="f-target" type="number" value="0" min="0" step="10000" />
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- Advanced -->
+    <fieldset class="collapsed">
+      <legend onclick="toggleFieldset(this.parentElement)">Advanced</legend>
+      <div class="fieldset-body">
+        <div class="form-row">
+          <label for="f-npaths">Number of paths (1–100,000)</label>
+          <input id="f-npaths" type="number" value="1000" min="100" max="100000" step="100" />
+        </div>
+        <div class="form-row">
+          <label for="f-mode">Mode</label>
+          <select id="f-mode">
+            <option value="fast">Fast (final values only, efficient memory)</option>
+            <option value="detailed">Detailed (full paths + fan chart)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="f-seed">Random seed (blank = random)</label>
+          <input id="f-seed" type="number" value="42" />
+        </div>
+      </div>
+    </fieldset>
+
+  </form><!-- #sidebar-form -->
+
+  <div id="action-bar">
+    <button id="run-btn" class="btn btn-primary" onclick="onRun()">Run Simulation</button>
+    <div id="secondary-actions">
+      <button class="btn btn-secondary" onclick="onSave()">Save Scenario</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('load-file').click()">Load Scenario</button>
+      <input id="load-file" type="file" accept=".json" style="display:none" onchange="onLoad(this)" />
+    </div>
+  </div>
+</aside>
+
+<!-- ════════════════════════════════════════════════════════════
+     MAIN PANEL
+════════════════════════════════════════════════════════════ -->
+<main id="main-panel">
+
+  <div id="status-bar">
+    <span id="status-text">Configure your scenario on the left and click Run Simulation.</span>
+  </div>
+
+  <div id="results-area">
+
+    <!-- Placeholder shown before first run -->
+    <div id="placeholder">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+      </svg>
+      <p>Your simulation results will appear here.</p>
+      <small>Fill in the scenario parameters and click <strong>Run Simulation</strong>.</small>
+    </div>
+
+    <!-- Results (hidden until first run) -->
+    <div id="results-content" class="hidden">
+
+      <!-- KPI cards -->
+      <div id="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">Success Probability</div>
+          <div class="kpi-value" id="kpi-success">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Median Final Value</div>
+          <div class="kpi-value" id="kpi-median">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Mean Final Value</div>
+          <div class="kpi-value" id="kpi-mean">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Expected Shortfall (5%)</div>
+          <div class="kpi-value" id="kpi-es">—</div>
+        </div>
+      </div>
+
+      <!-- Download button -->
+      <div id="results-actions">
+        <button class="btn btn-secondary" onclick="onDownloadResults()">Download Results JSON</button>
+      </div>
+
+      <!-- Charts -->
+      <div id="charts-row">
+        <div class="chart-card">
+          <h3 id="fan-chart-title">Portfolio Paths Over Time</h3>
+          <div class="chart-wrap"><canvas id="fan-chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Distribution of Final Values</h3>
+          <div class="chart-wrap"><canvas id="hist-chart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Percentile table -->
+      <div id="stats-table-card">
+        <h3>Percentile Summary</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Percentile</th>
+              <th>Final Portfolio Value</th>
+              <th>vs. Median</th>
+            </tr>
+          </thead>
+          <tbody id="pct-table-body"></tbody>
+        </table>
+      </div>
+
+    </div><!-- #results-content -->
+  </div><!-- #results-area -->
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
